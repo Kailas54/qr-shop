@@ -5,8 +5,8 @@ services:
     runtime: node
     rootDir: backend
     plan: free
-    buildCommand: npm install && npm run build
-    preDeployCommand: npx prisma migrate deploy
+    # Free tier: no preDeployCommand — run migrations during build (needs DATABASE_URL + DIRECT_URL set).
+    buildCommand: npm install && npm run build && npm run db:deploy:prod
     startCommand: npm run start
     healthCheckPath: /health
     envVars:

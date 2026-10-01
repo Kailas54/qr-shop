@@ -32,10 +32,11 @@ Typical layout:
 1. Push this repo to GitHub.
 2. Render → **New** → **Blueprint** → connect repo (`render.yaml`), or **Web Service** with **Root directory** `backend`.
 3. Set environment variables from `.env.production.example` (especially `DATABASE_URL`, `DIRECT_URL`, JWT secrets, Pusher, `CORS_ORIGINS`, `CUSTOMER_APP_URL`, `ADMIN_APP_URL`).
-4. **Build:** `npm install && npm run build`
-5. **Pre-deploy:** `npx prisma migrate deploy`
-6. **Start:** `npm run start`
-7. **Health check path:** `/health`
+4. **Build:** `npm install && npm run build && npm run db:deploy:prod` (migrations run here — Render **free** tier does not support pre-deploy commands; `render.yaml` is already set up this way).
+5. **Start:** `npm run start`
+6. **Health check path:** `/health`
+
+   Set `DATABASE_URL` and `DIRECT_URL` on Render **before** the first deploy so the build step can reach Neon.
 
 After deploy, note the URL (e.g. `https://qr-ordering-api.onrender.com`). Cold starts on free tier can take ~30s; the health check and client retries account for that.
 
