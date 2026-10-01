@@ -36,7 +36,9 @@ Typical layout:
 5. **Start:** `npm run start`
 6. **Health check path:** `/health`
 
-   Set `DATABASE_URL` and `DIRECT_URL` on Render **before** the first deploy so the build step can reach Neon.
+   Set `DATABASE_URL` (Neon **pooled** string) and `DIRECT_URL` (Neon **direct** string) on Render **before** the first deploy so the build step can reach Neon. You can paste Neon’s URLs as-is; at runtime the API adds `connection_limit=5` and related pool params if they are missing.
+
+   **Quick fix without redeploy:** append `&connection_limit=5` to the pooled `DATABASE_URL` in Render → Environment, save, and restart.
 
 After deploy, note the URL (e.g. `https://qr-ordering-api.onrender.com`). Cold starts on free tier can take ~30s; the health check and client retries account for that.
 

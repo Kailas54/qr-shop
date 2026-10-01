@@ -38,6 +38,19 @@ describe('parseEnv', () => {
     expect(env.DIRECT_URL).not.toContain('-pooler');
   });
 
+  it('fills Neon pool defaults when the console string omits query params', () => {
+    const env = parseEnv(
+      baseEnv({
+        DATABASE_URL:
+          'postgresql://user:pass@ep-example-pooler.ap-southeast-1.aws.neon.tech/neondb',
+        DIRECT_URL: 'postgresql://user:pass@ep-example.ap-southeast-1.aws.neon.tech/neondb',
+      }),
+    );
+    expect(env.DATABASE_URL).toContain('sslmode=require');
+    expect(env.DATABASE_URL).toContain('connection_limit=5');
+    expect(env.DIRECT_URL).toContain('sslmode=require');
+  });
+
   it('rejects a missing database URL', () => {
     const source = baseEnv();
     delete source.DATABASE_URL;
@@ -54,16 +67,16 @@ describe('parseEnv', () => {
     ).toThrow(/must be different/);
   });
 
-  it('rejects a Neon URL without sslmode=require', () => {
-    expect(() =>
-      parseEnv(
-        baseEnv({
-          DATABASE_URL:
-            'postgresql://user:pass@ep-example-pooler.ap-southeast-1.aws.neon.tech/neondb?connection_limit=5',
-          DIRECT_URL: neonDirectUrl,
-        }),
-      ),
-    ).toThrow(/sslmode=require/);
+  it('adds sslmode=require to a Neon pooled URL when omitted', () => {
+    const env = parseEnv(
+      baseEnv({
+        DATABASE_URL:
+          'postgresql://user:pass@ep-example-pooler.ap-southeast-1.aws.neon.tech/neondb?connection_limit=5',
+        DIRECT_URL: 'postgresql://user:pass@ep-example.ap-southeast-1.aws.neon.tech/neondb',
+      }),
+    );
+    expect(env.DATABASE_URL).toContain('sslmode=require');
+    expect(env.DIRECT_URL).toContain('sslmode=require');
   });
 
   it('rejects a Neon runtime URL that is not pooled', () => {

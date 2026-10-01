@@ -41,15 +41,52 @@ function readDatabaseUrl(label: string, value: string): URL {
   }
 }
 
+function isNeonHost(hostname: string): boolean {
+  return hostname.toLowerCase().includes('neon.tech');
+}
+
 function assertSslForNeon(label: string, url: URL): void {
-  const host = url.hostname.toLowerCase();
-  if (!host.includes('neon.tech')) {
+  if (!isNeonHost(url.hostname)) {
     return;
   }
   const sslmode = url.searchParams.get('sslmode')?.toLowerCase();
   if (sslmode !== 'require') {
     throw new Error(`${label} must include sslmode=require for Neon`);
   }
+}
+
+/** Align with `backend/scripts/set-neon-env.mjs` so pasted Neon console URLs work on Render. */
+export function normalizeDatabaseUrls(
+  databaseUrl: string,
+  directUrl: string,
+): { databaseUrl: string; directUrl: string } {
+  const database = readDatabaseUrl('DATABASE_URL', databaseUrl);
+  const direct = readDatabaseUrl('DIRECT_URL', directUrl);
+
+  if (isNeonHost(database.hostname)) {
+    if (database.searchParams.get('sslmode')?.toLowerCase() !== 'require') {
+      database.searchParams.set('sslmode', 'require');
+    }
+    if (!database.searchParams.get('connection_limit')) {
+      database.searchParams.set('connection_limit', '5');
+    }
+    if (!database.searchParams.get('pool_timeout')) {
+      database.searchParams.set('pool_timeout', '10');
+    }
+    if (!database.searchParams.get('connect_timeout')) {
+      database.searchParams.set('connect_timeout', '15');
+    }
+    databaseUrl = database.toString();
+  }
+
+  if (isNeonHost(direct.hostname)) {
+    if (direct.searchParams.get('sslmode')?.toLowerCase() !== 'require') {
+      direct.searchParams.set('sslmode', 'require');
+    }
+    directUrl = direct.toString();
+  }
+
+  return { databaseUrl, directUrl };
 }
 
 /**
@@ -135,7 +172,14 @@ export function parseEnv(source: NodeJS.ProcessEnv): AppEnv {
     throw new Error('Invalid environment: JWT_SECRET and GUEST_JWT_SECRET must be different');
   }
 
-  validateDatabaseUrls(data.DATABASE_URL, data.DIRECT_URL);
+  const dbUrls = normalizeDatabaseUrls(data.DATABASE_URL, data.DIRECT_URL);
+  validateDatabaseUrls(dbUrls.databaseUrl, dbUrls.directUrl);
+  if (dbUrls.databaseUrl !== data.DATABASE_URL) {
+    process.env.DATABASE_URL = dbUrls.databaseUrl;
+  }
+  if (dbUrls.directUrl !== data.DIRECT_URL) {
+    process.env.DIRECT_URL = dbUrls.directUrl;
+  }
   assertProductionSecrets(data);
   assertStorage(data);
 
@@ -153,5 +197,10 @@ export function parseEnv(source: NodeJS.ProcessEnv): AppEnv {
     throw new Error('Invalid environment: CORS_ORIGINS must list at least one origin');
   }
 
-  return { ...data, corsOrigins };
+  return {
+    ...data,
+    DATABASE_URL: dbUrls.databaseUrl,
+    DIRECT_URL: dbUrls.directUrl,
+    corsOrigins,
+  };
 }
