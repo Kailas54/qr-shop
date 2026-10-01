@@ -1,3 +1,4 @@
 {
+  "installCommand": "npm install && node ../scripts/install-shared.mjs",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

@@ -46,8 +46,8 @@ After deploy, note the URL (e.g. `https://qr-ordering-api.onrender.com`). Cold s
 
 ## 3. Admin app on Vercel
 
-1. Import the repo; set **Root Directory** to `admin-web`.
-2. **Build command:** `npm run build`
+1. Import the repo; set **Root Directory** to `admin-web` (Vercel still clones the full repo so `../shared` is available).
+2. **Install / build:** `vercel.json` runs `npm install && node ../scripts/install-shared.mjs` so `../shared` gets its own `node_modules` (needed for `tsc` on i18n). **Build:** `npm run build`.
 3. **Output:** `dist`
 4. Environment variable (build time):
 
