@@ -1,22 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useI18n } from '../../../shared/i18n/index.tsx';
+import { useAuth } from '../auth/AuthContext';
 import { AdminLayout } from '../components/AdminLayout';
 import { ApiRequestError } from '../lib/api';
+import { canManageMenuAndTables } from '../lib/permissions';
 import {
   closeSession,
+  createTable,
   fetchOpenSessions,
   fetchTables,
   openTableSession,
+  updateTable,
   type AdminTable,
 } from '../lib/tables';
 
 export function TablesPage() {
+  const { t } = useI18n();
+  const { user } = useAuth();
+  const canEdit = canManageMenuAndTables(user?.role);
   const [tables, setTables] = useState<AdminTable[]>([]);
   const [openSessionByTableId, setOpenSessionByTableId] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pinModal, setPinModal] = useState<{ tableNumber: string; pin: string } | null>(null);
   const [busyTableId, setBusyTableId] = useState<string | null>(null);
+  const [tableModal, setTableModal] = useState<null | { mode: 'create' } | { mode: 'edit'; table: AdminTable }>(null);
+  const [savingTable, setSavingTable] = useState(false);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -92,84 +102,139 @@ export function TablesPage() {
     await navigator.clipboard.writeText(url);
   }
 
+  async function handleTableSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canEdit) {
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    const tableNumber = String(form.get('tableNumber') ?? '').trim();
+    const isActive = form.get('isActive') === 'on';
+    if (!tableNumber) {
+      return;
+    }
+    setSavingTable(true);
+    setError(null);
+    try {
+      if (tableModal?.mode === 'edit') {
+        await updateTable(tableModal.table.id, { tableNumber, isActive });
+      } else {
+        await createTable(tableNumber, isActive);
+      }
+      setTableModal(null);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : err instanceof Error ? err.message : t('admin.saveFailed'));
+    } finally {
+      setSavingTable(false);
+    }
+  }
+
   return (
     <AdminLayout
-      title="Tables"
-      subtitle="Open a session, share the guest link or QR screen with colleagues."
+      title={t('admin.tablesTitle')}
+      subtitle={t('admin.tablesSubtitle')}
       actions={
-        <button
-          type="button"
-          onClick={() => void refresh()}
-          className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-900"
-        >
-          Refresh
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {canEdit ? (
+            <button
+              type="button"
+              onClick={() => setTableModal({ mode: 'create' })}
+              className="rounded-xl bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-white"
+            >
+              {t('admin.addTable')}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 shadow-sm hover:bg-stone-50"
+          >
+            {t('common.refresh')}
+          </button>
+        </div>
       }
     >
-      {loading ? <p className="p-4 text-slate-400">Loading tables…</p> : null}
-      {error ? <p className="p-4 text-red-400">{error}</p> : null}
+      {loading ? <p className="p-4 text-stone-500">{t('admin.loadingTables')}</p> : null}
+      {error ? <p className="p-4 text-red-600">{error}</p> : null}
 
       <main className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
         {sorted.map((table) => {
           const isOpen = openSessionByTableId.has(table.id);
           const busy = busyTableId === table.id;
           return (
-            <article key={table.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+            <article key={table.id} className="rounded-3xl border border-stone-200/80 bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="text-2xl font-bold">Table {table.tableNumber}</h2>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    isOpen ? 'bg-emerald-900 text-emerald-200' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {isOpen ? 'Open' : 'Closed'}
-                </span>
+                <h2 className="text-2xl font-bold text-stone-900">{t('common.table')} {table.tableNumber}</h2>
+                <div className="flex flex-col items-end gap-1">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      isOpen ? 'bg-red-50 text-[var(--brand)]' : 'bg-stone-100 text-stone-500'
+                    }`}
+                  >
+                    {isOpen ? t('admin.sessionOpen') : t('admin.sessionClosed')}
+                  </span>
+                  {!table.isActive ? (
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                      {t('admin.tableInactive')}
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
-              <p className="mt-3 break-all text-sm text-slate-400">{table.customerUrl}</p>
+              <p className="mt-3 break-all text-sm text-stone-500">{table.customerUrl}</p>
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <a
                   href={table.customerUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="rounded-lg bg-emerald-700 px-3 py-1.5 text-sm font-medium hover:bg-emerald-600"
+                  className="rounded-xl bg-[var(--brand)] px-3 py-1.5 text-sm font-semibold text-white"
                 >
-                  Open guest menu
+                  {t('admin.openGuestMenu')}
                 </a>
                 <button
                   type="button"
                   onClick={() => void copyLink(table.customerUrl)}
-                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-900"
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-700"
                 >
-                  Copy link
+                  {t('admin.copyLink')}
                 </button>
                 <Link
                   to={`/tables/${table.id}/qr`}
-                  className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-900"
+                  className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-700"
                 >
-                  QR screen
+                  {t('admin.qrScreen')}
                 </Link>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    onClick={() => setTableModal({ mode: 'edit', table })}
+                    className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-medium text-stone-700"
+                  >
+                    {t('admin.edit')}
+                  </button>
+                ) : null}
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-800 pt-4">
+              <div className="mt-4 flex flex-wrap gap-2 border-t border-stone-100 pt-4">
                 {!isOpen ? (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void handleOpen(table)}
-                    className="rounded-lg bg-blue-700 px-3 py-1.5 text-sm disabled:opacity-50"
+                    className="rounded-xl bg-stone-900 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                   >
-                    {busy ? 'Opening…' : 'Open table (get PIN)'}
+                    {busy ? t('admin.opening') : t('admin.openTable')}
                   </button>
                 ) : (
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => void handleClose(table)}
-                    className="rounded-lg border border-red-800 px-3 py-1.5 text-sm text-red-300 hover:bg-red-950/40 disabled:opacity-50"
+                    className="rounded-xl border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 disabled:opacity-50"
                   >
-                    {busy ? 'Closing…' : 'Close session'}
+                    {busy ? t('admin.closing') : t('admin.closeSession')}
                   </button>
                 )}
               </div>
@@ -178,18 +243,64 @@ export function TablesPage() {
         })}
       </main>
 
+      {tableModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-xl">
+            <h3 className="font-bold text-stone-900">
+              {tableModal.mode === 'edit' ? t('admin.editTable') : t('admin.addTable')}
+            </h3>
+            <form onSubmit={(e) => void handleTableSubmit(e)} className="mt-4 space-y-3">
+              <label className="block text-sm font-medium text-stone-600">
+                {t('admin.tableNumber')}
+                <input
+                  name="tableNumber"
+                  required
+                  maxLength={32}
+                  defaultValue={tableModal.mode === 'edit' ? tableModal.table.tableNumber : ''}
+                  className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2"
+                />
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  name="isActive"
+                  type="checkbox"
+                  defaultChecked={tableModal.mode === 'edit' ? tableModal.table.isActive : true}
+                />
+                {t('admin.tableActive')}
+              </label>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setTableModal(null)}
+                  className="flex-1 rounded-xl border border-stone-200 py-2.5 text-sm font-medium"
+                >
+                  {t('common.close')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingTable}
+                  className="flex-1 rounded-xl bg-[var(--brand)] py-2.5 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {t('admin.save')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       {pinModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-slate-700 bg-slate-900 p-6 text-center">
-            <p className="text-sm text-slate-400">Table {pinModal.tableNumber}</p>
-            <p className="mt-2 text-sm">Give this PIN to the guest:</p>
-            <p className="mt-3 text-4xl font-bold tracking-[0.4em]">{pinModal.pin}</p>
+          <div className="w-full max-w-sm rounded-3xl border border-stone-200 bg-white p-6 text-center shadow-xl">
+            <p className="text-sm text-stone-500">{t('common.table')} {pinModal.tableNumber}</p>
+            <p className="mt-2 text-sm text-stone-700">{t('admin.pinGive')}</p>
+            <p className="mt-3 text-4xl font-bold tracking-[0.4em] text-[var(--brand)]">{pinModal.pin}</p>
             <button
               type="button"
-              className="mt-6 w-full rounded-lg bg-slate-100 py-2 text-slate-900"
+              className="mt-6 w-full rounded-2xl bg-[var(--brand)] py-2.5 font-bold text-white"
               onClick={() => setPinModal(null)}
             >
-              Done
+              {t('common.done')}
             </button>
           </div>
         </div>

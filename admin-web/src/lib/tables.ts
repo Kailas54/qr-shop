@@ -38,6 +38,22 @@ export async function closeSession(sessionId: string) {
   );
 }
 
+export async function createTable(tableNumber: string, isActive: boolean) {
+  const result = await apiRequestAuthed<{ table: AdminTable }>('/api/admin/tables', {
+    method: 'POST',
+    body: JSON.stringify({ tableNumber, isActive }),
+  });
+  return result.table;
+}
+
+export async function updateTable(tableId: string, data: { tableNumber?: string; isActive?: boolean }) {
+  const result = await apiRequestAuthed<{ table: AdminTable }>(`/api/admin/tables/${tableId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  return result.table;
+}
+
 export async function loadTableQrObjectUrl(tableId: string): Promise<string> {
   const token = getAuthBridge()?.getAccessToken();
   if (!token) {

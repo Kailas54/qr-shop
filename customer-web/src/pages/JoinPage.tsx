@@ -1,7 +1,9 @@
 import { FormEvent, useState } from 'react';
+import { LanguageToggle, useI18n } from '../../../shared/i18n/index.tsx';
 import type { PublicTable } from '../lib/menu';
 import { useGuest } from '../guest/GuestContext';
 import { ApiRequestError } from '../lib/api';
+import { CustomerFrame } from '../components/customer/CustomerShell';
 
 type Props = {
   qrToken: string;
@@ -11,6 +13,7 @@ type Props = {
 
 export function JoinPage({ qrToken, table, onJoined }: Props) {
   const { join } = useGuest();
+  const { t } = useI18n();
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,88 +44,71 @@ export function JoinPage({ qrToken, table, onJoined }: Props) {
     void submitJoin(table.requireStaffOpen ? pin : undefined);
   }
 
-  if (waitingForStaff) {
-    return (
-      <div className="mx-auto max-w-md space-y-4 p-6 text-center">
-        <h1 className="text-2xl font-semibold">{table.restaurantName}</h1>
-        <p className="text-stone-400">Table {table.tableNumber}</p>
-        <p className="rounded-xl border border-amber-800/60 bg-amber-950/40 p-4 text-sm text-amber-100">
-          Your table is not open yet. Please ask a staff member to start your session, then enter the
-          PIN they give you.
-        </p>
-        <form onSubmit={handleSubmit} className="space-y-3 text-left">
-          <label className="block text-sm text-stone-300">
-            Table PIN
-            <input
-              inputMode="numeric"
-              pattern="\d{4}"
-              maxLength={4}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-lg tracking-[0.3em]"
-              placeholder="••••"
-              autoComplete="one-time-code"
-            />
-          </label>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={loading || pin.length !== 4}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 font-medium disabled:opacity-50"
-          >
-            {loading ? 'Joining…' : 'Join table'}
-          </button>
-        </form>
-      </div>
-    );
-  }
+  const pinForm = (
+    <form onSubmit={handleSubmit} className="space-y-3 text-start">
+      <label className="block text-sm font-medium text-stone-600">
+        {t('customer.tablePin')}
+        <input
+          inputMode="numeric"
+          pattern="\d{4}"
+          maxLength={4}
+          value={pin}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-center text-2xl tracking-[0.4em] text-stone-900 shadow-sm outline-none focus:border-[var(--brand)]"
+          placeholder="••••"
+          autoComplete="one-time-code"
+        />
+      </label>
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <button
+        type="submit"
+        disabled={loading || pin.length !== 4}
+        className="w-full rounded-2xl bg-[var(--brand)] py-3.5 font-bold text-white disabled:opacity-50"
+      >
+        {loading ? t('customer.joining') : t('customer.joinTable')}
+      </button>
+    </form>
+  );
 
   return (
-    <div className="mx-auto max-w-md space-y-4 p-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-semibold">{table.restaurantName}</h1>
-        <p className="text-stone-400">Table {table.tableNumber}</p>
-      </div>
+    <CustomerFrame>
+      <div className="flex min-h-[80vh] flex-col justify-center p-6">
+        <div className="mb-4 flex justify-center">
+          <LanguageToggle />
+        </div>
+        <div className="mx-auto w-full max-w-sm space-y-5 text-center">
+          <p className="text-sm text-stone-500">{t('customer.welcome')}</p>
+          <h1 className="text-2xl font-black text-[var(--brand)]">{table.restaurantName}</h1>
+          <p className="text-stone-600">{t('common.table')} {table.tableNumber}</p>
 
-      {table.requireStaffOpen ? (
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <p className="text-sm text-stone-400">Enter the 4-digit PIN from your server to start ordering.</p>
-          <label className="block text-sm text-stone-300">
-            Table PIN
-            <input
-              inputMode="numeric"
-              pattern="\d{4}"
-              maxLength={4}
-              value={pin}
-              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-              className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-lg tracking-[0.3em]"
-              placeholder="••••"
-              autoComplete="one-time-code"
-            />
-          </label>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={loading || pin.length !== 4}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 font-medium disabled:opacity-50"
-          >
-            {loading ? 'Joining…' : 'Join & view menu'}
-          </button>
-        </form>
-      ) : (
-        <>
-          <p className="text-sm text-stone-400">Tap below to open the menu and place an order.</p>
-          {error ? <p className="text-sm text-red-400">{error}</p> : null}
-          <button
-            type="button"
-            disabled={loading}
-            onClick={() => void submitJoin()}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 font-medium disabled:opacity-50"
-          >
-            {loading ? 'Starting…' : 'Start ordering'}
-          </button>
-        </>
-      )}
-    </div>
+          {waitingForStaff ? (
+            <>
+              <p className="rounded-2xl bg-amber-50 p-4 text-start text-sm text-amber-900 ring-1 ring-amber-200">
+                {t('customer.joinWaiting')}
+              </p>
+              {pinForm}
+            </>
+          ) : table.requireStaffOpen ? (
+            <>
+              <p className="text-sm text-stone-500">{t('customer.joinPinHint')}</p>
+              {pinForm}
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-stone-500">{t('customer.startHint')}</p>
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => void submitJoin()}
+                className="w-full rounded-2xl bg-[var(--brand)] py-3.5 font-bold text-white disabled:opacity-50"
+              >
+                {loading ? t('customer.starting') : t('customer.startOrdering')}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </CustomerFrame>
   );
 }

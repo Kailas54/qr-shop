@@ -58,9 +58,11 @@ export function getApiUrl() {
 }
 
 export function resolveMediaUrl(url: string | null | undefined): string | null {
-  if (!url) {
+  const trimmed = url?.trim();
+  if (!trimmed) {
     return null;
   }
+  url = trimmed;
   if (url.startsWith('http://') || url.startsWith('https://')) {
     return url;
   }

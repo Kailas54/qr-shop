@@ -1,29 +1,62 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import Pusher from 'pusher-js';
 import { CartProvider, useCart } from '../cart/CartContext';
 import { GuestProvider, useGuest } from '../guest/GuestContext';
+import { CartSheet } from '../components/customer/CartSheet';
+import {
+  BottomNav,
+  CategoryStrip,
+  CustomerFrame,
+  CustomerHeader,
+  HeroCarousel,
+  PromoBanner,
+  SearchBar,
+  type NavTab,
+} from '../components/customer/CustomerShell';
+import { ProductCard } from '../components/customer/ProductCard';
 import { ApiRequestError, resolveMediaUrl } from '../lib/api';
-import { fetchPublicTable, type MenuItem, type PublicTable } from '../lib/menu';
-import { ORDER_STATUS_LABELS, fetchMyOrders, placeOrder, type GuestOrder } from '../lib/orders';
+import { fetchPublicTable, type MenuCategory, type MenuItem, type PublicTable } from '../lib/menu';
+import { orderStatusLabel, useI18n } from '../../../shared/i18n/index.tsx';
+import { fetchMyOrders, placeOrder, type GuestOrder } from '../lib/orders';
 import { connectSessionPusher, fetchRealtimeConfig } from '../lib/realtime';
 import { JoinPage } from './JoinPage';
+
+type RealtimeKey = 'Connecting' | 'Live' | 'Poll' | 'Reconnecting';
 
 function formatMoney(paise: number) {
   return `₹${(paise / 100).toFixed(2)}`;
 }
 
+type MenuRow = { item: MenuItem; categoryName: string };
+
+function flattenMenu(categories: MenuCategory[]): MenuRow[] {
+  return categories.flatMap((cat) => cat.items.map((item) => ({ item, categoryName: cat.name })));
+}
+
 function TableExperience() {
+  const { t } = useI18n();
   const { qrToken = '' } = useParams();
   const { session, restore, leave } = useGuest();
   const [table, setTable] = useState<PublicTable | null>(null);
   const [loadingTable, setLoadingTable] = useState(true);
   const [tableError, setTableError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
-  const [tab, setTab] = useState<'menu' | 'orders'>('menu');
+  const [navTab, setNavTab] = useState<NavTab>('home');
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [vegOnly, setVegOnly] = useState(false);
   const [orders, setOrders] = useState<GuestOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  const [realtimeLabel, setRealtimeLabel] = useState('Connecting…');
+  const [realtimeKey, setRealtimeKey] = useState<RealtimeKey>('Connecting');
+  const realtimeLabel =
+    realtimeKey === 'Connecting'
+      ? t('customer.realtimeConnecting')
+      : realtimeKey === 'Live'
+        ? t('customer.realtimeLive')
+        : realtimeKey === 'Poll'
+          ? t('customer.realtimePoll')
+          : t('customer.realtimeReconnecting');
   const [cartOpen, setCartOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -36,11 +69,11 @@ function TableExperience() {
       const data = await fetchPublicTable(qrToken);
       setTable(data);
     } catch (err) {
-      setTableError(err instanceof Error ? err.message : 'Table not found');
+      setTableError(err instanceof Error ? err.message : t('customer.tableNotFound'));
     } finally {
       setLoadingTable(false);
     }
-  }, [qrToken]);
+  }, [qrToken, t]);
 
   useEffect(() => {
     void loadTable();
@@ -88,12 +121,12 @@ function TableExperience() {
         return;
       }
       if (!config.enabled) {
-        setRealtimeLabel('Updates every 20s');
+        setRealtimeKey('Poll');
         pollTimer = setInterval(() => void refreshOrders(), 20_000);
         return;
       }
 
-      setRealtimeLabel('Live updates');
+      setRealtimeKey('Live');
       pusher = connectSessionPusher(session.accessToken, session.sessionId, config, (payload) => {
         setOrders((current) =>
           current.map((order) =>
@@ -105,10 +138,10 @@ function TableExperience() {
       });
       if (pusher) {
         pusher.connection.bind('disconnected', () => {
-          setRealtimeLabel('Reconnecting…');
+          setRealtimeKey('Reconnecting');
         });
         pusher.connection.bind('connected', () => {
-          setRealtimeLabel('Live updates');
+          setRealtimeKey('Live');
           void refreshOrders();
         });
       }
@@ -127,6 +160,29 @@ function TableExperience() {
       }
     };
   }, [joined, session, refreshOrders]);
+
+  const filteredItems = useMemo(() => {
+    if (!table) {
+      return [];
+    }
+    const q = search.trim().toLowerCase();
+    let rows = flattenMenu(table.menu.categories);
+    if (categoryFilter) {
+      rows = rows.filter((row) => row.categoryName === categoryFilter);
+    }
+    if (vegOnly) {
+      rows = rows.filter((row) => row.item.isVeg);
+    }
+    if (q) {
+      rows = rows.filter(
+        (row) =>
+          row.item.name.toLowerCase().includes(q) ||
+          (row.item.description?.toLowerCase().includes(q) ?? false) ||
+          row.categoryName.toLowerCase().includes(q),
+      );
+    }
+    return rows;
+  }, [table, categoryFilter, search, vegOnly]);
 
   async function handlePlaceOrder() {
     if (!session || cart.lines.length === 0) {
@@ -147,7 +203,7 @@ function TableExperience() {
       cart.clear();
       setCartOpen(false);
       setOrders((current) => [order, ...current.filter((row) => row.id !== order.id)]);
-      setTab('orders');
+      setNavTab('orders');
     } catch (err) {
       setSubmitError(err instanceof ApiRequestError ? err.message : 'Could not place order');
     } finally {
@@ -156,213 +212,242 @@ function TableExperience() {
   }
 
   if (loadingTable) {
-    return <p className="p-6 text-stone-400">Loading table…</p>;
+    return (
+      <CustomerFrame>
+        <p className="p-8 text-center text-stone-500">{t('customer.loadingTable')}</p>
+      </CustomerFrame>
+    );
   }
 
   if (tableError || !table) {
-    return <p className="p-6 text-red-400">{tableError ?? 'Table not found'}</p>;
+    return (
+      <CustomerFrame>
+        <p className="p-8 text-center text-red-600">{tableError ?? t('customer.tableNotFound')}</p>
+      </CustomerFrame>
+    );
   }
 
   if (!joined || !session) {
     return <JoinPage qrToken={qrToken} table={table} onJoined={() => setJoined(true)} />;
   }
 
+  const showMenuChrome = navTab === 'home' || navTab === 'menu';
+
   return (
-    <div className="min-h-screen pb-24">
-      <header className="sticky top-0 z-10 border-b border-stone-800 bg-stone-950/95 px-4 py-3 backdrop-blur">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h1 className="text-lg font-semibold">{session.restaurantName}</h1>
-            <p className="text-xs text-stone-400">
-              Table {session.tableNumber} · {realtimeLabel}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              leave();
-              setJoined(false);
-            }}
-            className="text-xs text-stone-400 underline"
-          >
-            Leave
-          </button>
-        </div>
-        <nav className="mt-3 flex gap-2">
-          {(['menu', 'orders'] as const).map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={`rounded-full px-4 py-1.5 text-sm ${
-                tab === key ? 'bg-stone-100 text-stone-900' : 'bg-stone-800 text-stone-300'
-              }`}
-            >
-              {key === 'menu' ? 'Menu' : 'My orders'}
-            </button>
-          ))}
-        </nav>
-      </header>
+    <CustomerFrame>
+      <div className="pb-28">
+        {showMenuChrome ? (
+          <>
+            <CustomerHeader
+              restaurantName={session.restaurantName}
+              tableNumber={session.tableNumber}
+              cartCount={cart.itemCount}
+              onOpenCart={() => setCartOpen(true)}
+              onOpenMenu={() => setNavTab('menu')}
+            />
+            <SearchBar
+              value={search}
+              onChange={setSearch}
+              vegOnly={vegOnly}
+              onToggleVeg={() => setVegOnly((v) => !v)}
+            />
+          </>
+        ) : null}
 
-      {tab === 'menu' ? (
-        <main className="space-y-6 p-4">
-          {table.menu.categories.map((category) => (
-            <section key={category.name}>
-              <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-stone-400">
-                {category.name}
-              </h2>
-              <ul className="space-y-3">
-                {category.items.map((item) => (
-                  <MenuRow key={item.id} item={item} onAdd={() => cart.addItem(item)} />
-                ))}
-              </ul>
-            </section>
-          ))}
-        </main>
-      ) : (
-        <main className="space-y-3 p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-stone-400">{ordersLoading ? 'Refreshing…' : `${orders.length} order(s)`}</p>
-            <button
-              type="button"
-              onClick={() => void refreshOrders()}
-              className="text-sm text-emerald-400 underline"
-            >
-              Refresh
-            </button>
-          </div>
-          {orders.length === 0 ? (
-            <p className="text-stone-500">No orders yet. Add items from the menu.</p>
-          ) : (
-            orders.map((order) => (
-              <article key={order.id} className="rounded-xl border border-stone-800 bg-stone-900/50 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium">{ORDER_STATUS_LABELS[order.status] ?? order.status}</p>
-                  <p className="text-sm text-stone-400">{formatMoney(order.total)}</p>
-                </div>
-                <ul className="mt-2 space-y-1 text-sm text-stone-300">
-                  {order.items.map((line) => (
-                    <li key={`${order.id}-${line.menuItemId}`}>
-                      {line.quantity}× {line.name}
-                    </li>
-                  ))}
-                </ul>
-                {order.notes ? <p className="mt-2 text-xs text-amber-300">Note: {order.notes}</p> : null}
-              </article>
-            ))
-          )}
-        </main>
-      )}
-
-      {cart.itemCount > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-stone-800 bg-stone-950 p-4">
-          {!cartOpen ? (
-            <button
-              type="button"
-              onClick={() => setCartOpen(true)}
-              className="flex w-full items-center justify-between rounded-xl bg-emerald-600 px-4 py-3 font-medium"
-            >
-              <span>View cart ({cart.itemCount})</span>
-              <span>{formatMoney(cart.subtotal)}</span>
-            </button>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium">Your cart</h3>
-                <button type="button" className="text-sm text-stone-400" onClick={() => setCartOpen(false)}>
-                  Close
+        {navTab === 'home' ? (
+          <>
+            <HeroCarousel />
+            <CategoryStrip
+              categories={table.menu.categories}
+              selected={categoryFilter}
+              onSelect={(name) => {
+                setCategoryFilter(name);
+                if (name) {
+                  setNavTab('menu');
+                }
+              }}
+            />
+            <section className="px-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-bold text-stone-900">{t('customer.popularPicks')}</h2>
+                <button
+                  type="button"
+                  onClick={() => setNavTab('menu')}
+                  className="text-sm font-semibold text-[var(--brand)]"
+                >
+                  {t('customer.viewAll')}
                 </button>
               </div>
-              <ul className="max-h-48 space-y-2 overflow-y-auto text-sm">
-                {cart.lines.map((line) => (
-                  <li key={line.menuItemId} className="flex items-center justify-between gap-2">
-                    <span className="flex-1">
-                      {line.isVeg ? '🟢' : '🔴'} {line.name}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        className="h-8 w-8 rounded border border-stone-700"
-                        onClick={() => cart.setQuantity(line.menuItemId, line.quantity - 1)}
-                      >
-                        −
-                      </button>
-                      <span className="w-6 text-center">{line.quantity}</span>
-                      <button
-                        type="button"
-                        className="h-8 w-8 rounded border border-stone-700"
-                        onClick={() => cart.setQuantity(line.menuItemId, line.quantity + 1)}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </li>
+              <div className="flex gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {filteredItems.slice(0, 8).map((row, index) => (
+                  <ProductCard
+                    key={row.item.id}
+                    item={row.item}
+                    categoryName={row.categoryName}
+                    imageUrl={resolveMediaUrl(row.item.imageUrl)}
+                    index={index}
+                    onAdd={() => cart.addItem(row.item)}
+                  />
                 ))}
-              </ul>
-              <label className="block text-sm text-stone-400">
-                Notes for kitchen
-                <textarea
-                  value={cart.notes}
-                  onChange={(e) => cart.setNotes(e.target.value)}
-                  rows={2}
-                  className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-stone-100"
-                  placeholder="Optional"
-                />
-              </label>
-              {submitError ? <p className="text-sm text-red-400">{submitError}</p> : null}
+              </div>
+            </section>
+            <PromoBanner />
+          </>
+        ) : null}
+
+        {navTab === 'menu' ? (
+          <main className="px-4 pt-2">
+            <CategoryStrip
+              categories={table.menu.categories}
+              selected={categoryFilter}
+              onSelect={setCategoryFilter}
+            />
+            {filteredItems.length === 0 ? (
+              <p className="py-12 text-center text-stone-500">{t('customer.noDishes')}</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4 pb-4 sm:grid-cols-2">
+                {filteredItems.map((row, index) => (
+                  <ProductCard
+                    key={row.item.id}
+                    item={row.item}
+                    categoryName={row.categoryName}
+                    imageUrl={resolveMediaUrl(row.item.imageUrl)}
+                    index={index}
+                    onAdd={() => cart.addItem(row.item)}
+                    layout="grid"
+                  />
+                ))}
+              </div>
+            )}
+          </main>
+        ) : null}
+
+        {navTab === 'orders' ? (
+          <main className="space-y-4 p-4 pt-6">
+            <div>
+              <h2 className="text-xl font-bold text-stone-900">{t('customer.myOrders')}</h2>
+              <p className="text-xs text-stone-500">{realtimeLabel}</p>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-stone-500">
+                {ordersLoading ? t('common.loading') : t('customer.ordersCount', { count: orders.length })}
+              </p>
               <button
                 type="button"
-                disabled={submitting}
-                onClick={() => void handlePlaceOrder()}
-                className="w-full rounded-xl bg-emerald-600 py-3 font-semibold disabled:opacity-50"
+                onClick={() => void refreshOrders()}
+                className="text-sm font-semibold text-[var(--brand)]"
               >
-                {submitting ? 'Placing order…' : `Place order · ${formatMoney(cart.subtotal)}`}
+                {t('common.refresh')}
               </button>
             </div>
-          )}
+            {orders.length === 0 ? (
+              <div className="rounded-3xl bg-white p-8 text-center shadow-sm">
+                <p className="text-stone-500">{t('customer.noOrders')}</p>
+                <button
+                  type="button"
+                  onClick={() => setNavTab('home')}
+                  className="mt-4 rounded-full bg-[var(--brand)] px-6 py-2 text-sm font-semibold text-white"
+                >
+                  {t('customer.browseMenu')}
+                </button>
+              </div>
+            ) : (
+              orders.map((order) => (
+                <article key={order.id} className="rounded-3xl bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.06)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-stone-900">{orderStatusLabel(t, order.status)}</p>
+                    <p className="text-sm font-semibold text-[var(--brand)]">{formatMoney(order.total)}</p>
+                  </div>
+                  <ul className="mt-2 space-y-1 text-sm text-stone-600">
+                    {order.items.map((line) => (
+                      <li key={`${order.id}-${line.menuItemId}`}>
+                        {line.quantity}× {line.name}
+                      </li>
+                    ))}
+                  </ul>
+                  {order.notes ? (
+                    <p className="mt-2 text-xs text-amber-700">{t('customer.notePrefix')} {order.notes}</p>
+                  ) : null}
+                </article>
+              ))
+            )}
+          </main>
+        ) : null}
+
+        {navTab === 'offers' ? (
+          <main className="space-y-4 p-4 pt-6">
+            <h2 className="text-xl font-bold text-stone-900">{t('customer.offersTitle')}</h2>
+            <HeroCarousel />
+            <PromoBanner />
+            <div className="rounded-3xl bg-white p-5 shadow-sm">
+              <p className="text-sm text-stone-600">{t('customer.offersBody')}</p>
+            </div>
+          </main>
+        ) : null}
+
+        {navTab === 'profile' ? (
+          <main className="space-y-4 p-4 pt-6">
+            <h2 className="text-xl font-bold text-stone-900">{t('customer.profileTitle')}</h2>
+            <div className="rounded-3xl bg-white p-5 shadow-sm">
+              <p className="text-sm text-stone-500">{t('customer.restaurant')}</p>
+              <p className="text-lg font-bold">{session.restaurantName}</p>
+              <p className="mt-3 text-sm text-stone-500">{t('common.table')}</p>
+              <p className="text-lg font-bold">{session.tableNumber}</p>
+              <p className="mt-3 text-xs text-stone-400">{realtimeLabel}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                leave();
+                setJoined(false);
+              }}
+              className="w-full rounded-2xl border-2 border-[var(--brand)] py-3 font-semibold text-[var(--brand)]"
+            >
+              {t('customer.leaveTable')}
+            </button>
+          </main>
+        ) : null}
+      </div>
+
+      {cart.itemCount > 0 && !cartOpen ? (
+        <div className="fixed inset-x-0 bottom-[5.5rem] z-20 mx-auto max-w-lg px-4">
+          <button
+            type="button"
+            onClick={() => setCartOpen(true)}
+            className="flex w-full items-center justify-between rounded-2xl bg-[var(--brand)] px-5 py-3.5 font-bold text-white shadow-lg"
+          >
+            <span>{t('customer.viewCart', { count: cart.itemCount })}</span>
+            <span>{formatMoney(cart.subtotal)}</span>
+          </button>
         </div>
       ) : null}
-    </div>
+
+      <BottomNav tab={navTab} onChange={setNavTab} />
+
+      <CartSheet
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        submitting={submitting}
+        submitError={submitError}
+        onPlaceOrder={() => void handlePlaceOrder()}
+      />
+    </CustomerFrame>
   );
 }
 
-function MenuRow({ item, onAdd }: { item: MenuItem; onAdd: () => void }) {
-  const image = resolveMediaUrl(item.imageUrl);
+function InvalidQr() {
+  const { t } = useI18n();
   return (
-    <li className="flex gap-3 rounded-xl border border-stone-800 bg-stone-900/40 p-3">
-      {image ? (
-        <img src={image} alt="" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
-      ) : (
-        <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-stone-800 text-xs text-stone-500">
-          No photo
-        </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="font-medium">
-            {item.isVeg ? '🟢 ' : '🔴 '}
-            {item.name}
-          </p>
-          <p className="shrink-0 text-sm">{formatMoney(item.price)}</p>
-        </div>
-        {item.description ? <p className="mt-1 text-sm text-stone-400">{item.description}</p> : null}
-        <button
-          type="button"
-          disabled={!item.isAvailable}
-          onClick={onAdd}
-          className="mt-2 rounded-lg bg-stone-100 px-3 py-1 text-sm font-medium text-stone-900 disabled:opacity-40"
-        >
-          {item.isAvailable ? 'Add' : 'Unavailable'}
-        </button>
-      </div>
-    </li>
+    <CustomerFrame>
+      <p className="p-8 text-center text-red-600">{t('customer.invalidQr')}</p>
+    </CustomerFrame>
   );
 }
 
 export function TablePage() {
   const { qrToken = '' } = useParams();
   if (!qrToken) {
-    return <p className="p-6 text-red-400">Invalid QR link</p>;
+    return <InvalidQr />;
   }
 
   return (

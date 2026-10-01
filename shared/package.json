@@ -1,0 +1,11 @@
+{
+  "name": "@qr/shared",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.12"
+  }
+}

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useI18n } from '../../../shared/i18n/index.tsx';
 import { AdminLayout } from '../components/AdminLayout';
 import { fetchTables, loadTableQrObjectUrl } from '../lib/tables';
 
 export function TableQrPage() {
+  const { t } = useI18n();
   const { tableId = '' } = useParams();
   const [customerUrl, setCustomerUrl] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState<string | null>(null);
@@ -48,15 +50,22 @@ export function TableQrPage() {
 
   return (
     <AdminLayout
-      title={tableNumber ? `Table ${tableNumber} — QR` : 'Table QR'}
-      subtitle="Share this screen in a meeting or open the link on your phone."
+      title={
+        tableNumber
+          ? `${t('common.table')} ${tableNumber} — ${t('admin.qrScreen')}`
+          : t('admin.tableQr')
+      }
+      subtitle={t('admin.tableQrSubtitle')}
       actions={
-        <Link to="/tables" className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-900">
-          ← All tables
+        <Link
+          to="/tables"
+          className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 shadow-sm hover:bg-stone-50"
+        >
+          {t('admin.allTables')}
         </Link>
       }
     >
-      {error ? <p className="p-6 text-red-400">{error}</p> : null}
+      {error ? <p className="p-6 text-red-600">{error}</p> : null}
 
       {!error && customerUrl ? (
         <div className="mx-auto flex max-w-lg flex-col items-center gap-6 p-6 text-center">
@@ -64,31 +73,31 @@ export function TableQrPage() {
             <img
               src={qrUrl}
               alt={`QR code for table ${tableNumber}`}
-              className="rounded-2xl bg-white p-4 shadow-lg"
+              className="rounded-3xl bg-white p-4 shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
               width={280}
               height={280}
             />
           ) : (
-            <p className="text-slate-400">Loading QR…</p>
+            <p className="text-stone-500">{t('admin.loadingQr')}</p>
           )}
 
           <a
             href={customerUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full rounded-xl bg-emerald-600 px-6 py-4 text-lg font-semibold hover:bg-emerald-500"
+            className="w-full rounded-2xl bg-[var(--brand)] px-6 py-4 text-lg font-bold text-white shadow-md"
           >
-            Open customer menu
+            {t('admin.openCustomerMenu')}
           </a>
 
-          <p className="break-all text-sm text-slate-400">{customerUrl}</p>
+          <p className="break-all text-sm text-stone-500">{customerUrl}</p>
 
           <button
             type="button"
             onClick={() => void navigator.clipboard.writeText(customerUrl)}
-            className="text-sm text-slate-300 underline"
+            className="text-sm font-semibold text-[var(--brand)] underline"
           >
-            Copy guest link
+            {t('admin.copyGuestLink')}
           </button>
         </div>
       ) : null}

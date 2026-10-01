@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Pusher from 'pusher-js';
+import { useI18n } from '../../../shared/i18n/index.tsx';
 import { useAuth } from '../auth/AuthContext';
 import { AdminLayout } from '../components/AdminLayout';
 import { wakeDatabase } from '../lib/api';
@@ -14,14 +15,6 @@ import {
   patchOrderStatus,
   type OrderAuditEvent,
 } from '../lib/realtime';
-
-const COLUMNS: Array<{ key: string; label: string }> = [
-  { key: 'pending_confirmation', label: 'Confirm' },
-  { key: 'placed', label: 'Placed' },
-  { key: 'accepted', label: 'Accepted' },
-  { key: 'preparing', label: 'Preparing' },
-  { key: 'served', label: 'Served' },
-];
 
 function formatMoney(paise: number) {
   return `₹${(paise / 100).toFixed(2)}`;
@@ -69,12 +62,29 @@ function mapCreatedPayload(payload: Record<string, unknown>, existing?: BoardOrd
 }
 
 export function OrdersBoardPage() {
+  const { t } = useI18n();
   const { accessToken, user } = useAuth();
   const staffRole = user?.role ?? '';
+  const columns = useMemo(
+    () => [
+      { key: 'pending_confirmation', label: t('admin.columnConfirm') },
+      { key: 'placed', label: t('admin.columnPlaced') },
+      { key: 'accepted', label: t('admin.columnAccepted') },
+      { key: 'preparing', label: t('admin.columnPreparing') },
+      { key: 'served', label: t('admin.columnServed') },
+    ],
+    [t],
+  );
   const [orders, setOrders] = useState<BoardOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [realtimeLabel, setRealtimeLabel] = useState('Connecting…');
+  const [realtimeMode, setRealtimeMode] = useState<'rest' | 'live' | 'loading'>('loading');
+  const realtimeLabel =
+    realtimeMode === 'loading'
+      ? t('common.loading')
+      : realtimeMode === 'live'
+        ? t('admin.realtimePusher')
+        : t('admin.realtimeRest');
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [audit, setAudit] = useState<{ orderId: string; events: OrderAuditEvent[] } | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -124,10 +134,10 @@ export function OrdersBoardPage() {
           return;
         }
         if (!config.enabled) {
-          setRealtimeLabel('REST only (Pusher not configured)');
+          setRealtimeMode('rest');
           return;
         }
-        setRealtimeLabel('Live via Pusher');
+        setRealtimeMode('live');
         pusher = connectRestaurantPusher(staff.restaurantId, config, {
           onOrderCreated: (payload) => {
             const row = mapCreatedPayload(payload as Record<string, unknown>);
@@ -175,7 +185,7 @@ export function OrdersBoardPage() {
 
   const grouped = useMemo(() => {
     const map = new Map<string, BoardOrder[]>();
-    for (const column of COLUMNS) {
+    for (const column of columns) {
       map.set(column.key, []);
     }
     for (const order of orders) {
@@ -185,7 +195,7 @@ export function OrdersBoardPage() {
       }
     }
     return map;
-  }, [orders]);
+  }, [orders, columns]);
 
   async function advance(order: BoardOrder, status: string) {
     if (!accessToken) {
@@ -223,120 +233,122 @@ export function OrdersBoardPage() {
 
   return (
     <AdminLayout
-      title="Orders board"
+      title={t('admin.ordersBoard')}
       subtitle={realtimeLabel}
       actions={
         <button
           type="button"
           onClick={() => void refresh()}
-          className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-900"
+          className="rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-sm font-semibold text-stone-700 shadow-sm hover:bg-stone-50"
         >
-          Refresh
+          {t('common.refresh')}
         </button>
       }
     >
-      {loading ? <p className="p-4 text-slate-400">Loading orders…</p> : null}
-      {error ? <p className="p-4 text-red-400">{error}</p> : null}
+      {loading ? <p className="p-4 text-stone-500">{t('admin.loadingOrders')}</p> : null}
+      {error ? <p className="p-4 text-red-600">{error}</p> : null}
 
       <main className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">
-        {COLUMNS.map((column) => (
-          <section key={column.key} className="rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-            <h2 className="mb-3 text-sm font-medium text-slate-300">{column.label}</h2>
+        {columns.map((column) => (
+          <section key={column.key} className="rounded-2xl border border-stone-200/80 bg-white p-3 shadow-sm">
+            <h2 className="mb-3 text-sm font-bold text-stone-700">{column.label}</h2>
             <div className="space-y-3">
               {(grouped.get(column.key) ?? []).map((order) => (
                 <article
                   key={order.id}
-                  className={`rounded-lg border p-3 ${
+                  className={`rounded-2xl border p-3 ${
                     highlightId === order.id
-                      ? 'border-emerald-400 bg-emerald-950/40'
-                      : 'border-slate-800 bg-slate-950'
+                      ? 'border-[var(--brand)] bg-red-50'
+                      : 'border-stone-200 bg-[var(--bg-cream)]'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-2xl font-bold leading-none">T{order.tableNumber}</p>
-                    <span className="text-xs text-slate-400">{minutesSince(order.createdAt)}m</span>
+                    <span className="text-xs text-stone-500">{minutesSince(order.createdAt)}m</span>
                   </div>
                   <p className="mt-2 text-sm font-medium">{formatMoney(order.total)}</p>
-                  <ul className="mt-2 space-y-1 text-sm text-slate-300">
+                  <ul className="mt-2 space-y-1 text-sm text-stone-600">
                     {order.items.map((item) => (
                       <li key={`${order.id}-${item.name}`}>
                         {item.quantity}× {item.name}
                       </li>
                     ))}
                   </ul>
-                  {order.notes ? <p className="mt-2 text-xs text-amber-300">Note: {order.notes}</p> : null}
+                  {order.notes ? (
+                    <p className="mt-2 text-xs text-amber-700">{t('admin.notePrefix')} {order.notes}</p>
+                  ) : null}
                   {order.flaggedForReview ? (
-                    <p className="mt-2 text-xs text-orange-400">High value — review</p>
+                    <p className="mt-2 text-xs text-orange-600">{t('admin.highValue')}</p>
                   ) : null}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300"
+                      className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs font-medium text-stone-700"
                       onClick={() => void openAudit(order.id)}
                     >
-                      History
+                      {t('admin.history')}
                     </button>
                     {order.status === 'pending_confirmation' && canConfirm ? (
                       <button
                         type="button"
-                        className="rounded bg-emerald-700 px-2 py-1 text-xs"
+                        className="rounded-lg bg-[var(--brand)] px-2 py-1 text-xs font-semibold text-white"
                         onClick={() => void confirm(order)}
                       >
-                        Confirm
+                        {t('admin.confirm')}
                       </button>
                     ) : null}
                     {order.status === 'pending_confirmation' && canCancel ? (
                       <button
                         type="button"
-                        className="rounded bg-red-900 px-2 py-1 text-xs"
+                        className="rounded-lg bg-red-600 px-2 py-1 text-xs font-semibold text-white"
                         onClick={() => void cancelOrder(order)}
                       >
-                        Reject
+                        {t('admin.reject')}
                       </button>
                     ) : null}
                     {order.status === 'placed' ? (
                       <button
                         type="button"
-                        className="rounded bg-blue-700 px-2 py-1 text-xs"
+                        className="rounded-lg bg-[var(--brand)] px-2 py-1 text-xs font-semibold text-white"
                         onClick={() => void advance(order, 'accepted')}
                       >
-                        Accept
+                        {t('admin.accept')}
                       </button>
                     ) : null}
                     {order.status === 'accepted' ? (
                       <button
                         type="button"
-                        className="rounded bg-violet-700 px-2 py-1 text-xs"
+                        className="rounded-lg bg-stone-800 px-2 py-1 text-xs font-semibold text-white"
                         onClick={() => void advance(order, 'preparing')}
                       >
-                        Preparing
+                        {t('admin.preparing')}
                       </button>
                     ) : null}
                     {order.status === 'preparing' ? (
                       <button
                         type="button"
-                        className="rounded bg-teal-700 px-2 py-1 text-xs"
+                        className="rounded-lg bg-stone-800 px-2 py-1 text-xs font-semibold text-white"
                         onClick={() => void advance(order, 'served')}
                       >
-                        Served
+                        {t('admin.served')}
                       </button>
                     ) : null}
                     {order.status === 'served' && canMarkPaid ? (
                       <button
                         type="button"
-                        className="rounded bg-amber-700 px-2 py-1 text-xs"
+                        className="rounded-lg bg-amber-600 px-2 py-1 text-xs font-semibold text-white"
                         onClick={() => void advance(order, 'paid')}
                       >
-                        Mark paid
+                        {t('admin.markPaid')}
                       </button>
                     ) : null}
                     {order.status !== 'pending_confirmation' && canCancel ? (
                       <button
                         type="button"
-                        className="rounded border border-red-800 px-2 py-1 text-xs text-red-300"
+                        className="rounded-lg border border-red-300 px-2 py-1 text-xs font-medium text-red-700"
                         onClick={() => void cancelOrder(order)}
                       >
-                        Cancel
+                        {t('admin.cancel')}
                       </button>
                     ) : null}
                   </div>
@@ -349,28 +361,28 @@ export function OrdersBoardPage() {
 
       {audit || auditLoading ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-xl border border-slate-700 bg-slate-900 p-5">
+          <div className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-3xl border border-stone-200 bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-medium">Order history</h3>
+              <h3 className="font-bold text-stone-900">{t('admin.orderHistory')}</h3>
               <button
                 type="button"
-                className="text-sm text-slate-400"
+                className="text-sm font-medium text-stone-500"
                 onClick={() => setAudit(null)}
               >
-                Close
+                {t('common.close')}
               </button>
             </div>
-            {auditLoading ? <p className="mt-4 text-sm text-slate-400">Loading…</p> : null}
+            {auditLoading ? <p className="mt-4 text-sm text-stone-500">{t('common.loading')}</p> : null}
             {audit ? (
               <ul className="mt-4 space-y-3 text-sm">
                 {audit.events.map((event) => (
-                  <li key={event.id} className="border-l-2 border-slate-700 pl-3">
-                    <p className="font-medium">
+                  <li key={event.id} className="border-s-2 border-[var(--brand)] ps-3">
+                    <p className="font-medium text-stone-800">
                       {event.fromStatus ? `${event.fromStatus} → ${event.toStatus}` : event.toStatus}
                     </p>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-stone-500">
                       {new Date(event.createdAt).toLocaleString()}
-                      {event.changedBy ? ` · ${event.changedBy.name}` : ' · System'}
+                      {event.changedBy ? ` · ${event.changedBy.name}` : ` · ${t('common.system')}`}
                     </p>
                   </li>
                 ))}
