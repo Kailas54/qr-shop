@@ -6,7 +6,8 @@ services:
     rootDir: backend
     plan: free
     # Free tier: no preDeployCommand — run migrations during build (needs DATABASE_URL + DIRECT_URL set).
-    buildCommand: npm install && npm run build && npm run db:deploy:prod
+    # NODE_ENV=production skips devDependencies unless --include=dev (needs tsc, prisma, @types/*).
+    buildCommand: npm install --include=dev && npm run build && npm run db:deploy:prod
     startCommand: npm run start
     healthCheckPath: /health
     envVars:

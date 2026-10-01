@@ -32,7 +32,7 @@ Typical layout:
 1. Push this repo to GitHub.
 2. Render → **New** → **Blueprint** → connect repo (`render.yaml`), or **Web Service** with **Root directory** `backend`.
 3. Set environment variables from `.env.production.example` (especially `DATABASE_URL`, `DIRECT_URL`, JWT secrets, Pusher, `CORS_ORIGINS`, `CUSTOMER_APP_URL`, `ADMIN_APP_URL`).
-4. **Build:** `npm install && npm run build && npm run db:deploy:prod` (migrations run here — Render **free** tier does not support pre-deploy commands; `render.yaml` is already set up this way).
+4. **Build:** `npm install --include=dev && npm run build && npm run db:deploy:prod` — required because `NODE_ENV=production` omits devDependencies (`typescript`, `prisma`, `@types/*`) unless you pass `--include=dev`. Migrations run in this step (free tier has no pre-deploy).
 5. **Start:** `npm run start`
 6. **Health check path:** `/health`
 
