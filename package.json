@@ -1,0 +1,30 @@
+{
+  "name": "qr-table-ordering",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --prefix backend",
+    "dev:admin": "npm run dev --prefix admin-web",
+    "dev:customer": "npm run dev --prefix customer-web",
+    "setup": "npm run db:deploy && npm run db:seed",
+    "db:local:start": "npm run db:local:start --prefix backend",
+    "db:local:stop": "npm run db:local:stop --prefix backend",
+    "db:local:status": "npm run db:local:status --prefix backend",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f postgres",
+    "db:deploy": "npm run db:deploy --prefix backend",
+    "db:migrate": "npm run db:migrate --prefix backend",
+    "db:seed": "npm run db:seed --prefix backend",
+    "db:check": "npm run db:check --prefix backend",
+    "db:neon:validate": "npm run db:neon:validate --prefix backend",
+    "test": "npm test --prefix backend",
+    "build": "npm run build --prefix backend",
+    "build:admin": "npm run build --prefix admin-web",
+    "build:customer": "npm run build --prefix customer-web",
+    "build:all": "npm run build && npm run build:admin && npm run build:customer",
+    "start": "npm run start --prefix backend"
+  }
+}

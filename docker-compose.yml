@@ -1,0 +1,23 @@
+# Optional local PostgreSQL. Default local dev uses embedded Postgres (npm run db:local:start).
+# Production uses Neon (pooled DATABASE_URL + direct DIRECT_URL).
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qr-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: qr
+      POSTGRES_PASSWORD: qr
+      POSTGRES_DB: qr_ordering
+    ports:
+      - "5432:5432"
+    volumes:
+      - qr_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U qr -d qr_ordering"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  qr_pg_data:

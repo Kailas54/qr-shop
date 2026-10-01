@@ -1,0 +1,38 @@
+# Render Blueprint — API only. Frontends: deploy admin-web and customer-web on Vercel (see docs/DEPLOYMENT.md).
+services:
+  - type: web
+    name: qr-ordering-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install && npm run build
+    preDeployCommand: npx prisma migrate deploy
+    startCommand: npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GUEST_JWT_SECRET
+        generateValue: true
+      - key: PUSHER_APP_ID
+        sync: false
+      - key: PUSHER_KEY
+        sync: false
+      - key: PUSHER_SECRET
+        sync: false
+      - key: PUSHER_CLUSTER
+        sync: false
+      - key: CUSTOMER_APP_URL
+        sync: false
+      - key: ADMIN_APP_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

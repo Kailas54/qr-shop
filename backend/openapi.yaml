@@ -1,0 +1,267 @@
+openapi: 3.0.3
+info:
+  title: QR Table Ordering API
+  version: 0.1.0
+  description: |
+    Staff and guest APIs for QR-based table ordering.
+    Prices are integer **paise** (₹1 = 100). Guest orders require `Authorization: Bearer <guestToken>` and `Idempotency-Key` on POST /api/orders.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+tags:
+  - name: Health
+  - name: Public
+  - name: Guest orders
+  - name: Staff auth
+  - name: Staff tables
+  - name: Staff orders
+  - name: Realtime
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check (includes DB probe)
+      responses:
+        '200':
+          description: API and database are up
+        '503':
+          description: Database unavailable
+  /api/public/tables/{qrToken}:
+    get:
+      tags: [Public]
+      summary: Public menu and table info for a QR token
+      parameters:
+        - name: qrToken
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Restaurant name, table number, sessionOpen, menu categories
+        '404':
+          description: Table not found
+  /api/public/sessions/join:
+    post:
+      tags: [Public]
+      summary: Join table session (PIN when require_staff_open)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qrToken]
+              properties:
+                qrToken: { type: string }
+                pin: { type: string, pattern: '^\\d{4}$' }
+      responses:
+        '200':
+          description: Guest accessToken, sessionId, expiresAt
+  /api/public/sessions/me:
+    get:
+      tags: [Public]
+      security: [{ guestBearer: [] }]
+      summary: Validate guest session
+      responses:
+        '200':
+          description: sessionId, tableNumber, expiresAt
+  /api/public/realtime-config:
+    get:
+      tags: [Public]
+      summary: Pusher public key for guest clients
+      responses:
+        '200':
+          description: enabled, key, cluster
+  /api/orders:
+    post:
+      tags: [Guest orders]
+      security: [{ guestBearer: [] }]
+      summary: Place order (server-side pricing)
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                notes: { type: string, maxLength: 500 }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [menuItemId, quantity]
+                    properties:
+                      menuItemId: { type: string, format: uuid }
+                      quantity: { type: integer, minimum: 1 }
+      responses:
+        '201':
+          description: Order created
+        '200':
+          description: Idempotent replay
+  /api/orders/mine:
+    get:
+      tags: [Guest orders]
+      security: [{ guestBearer: [] }]
+      summary: List orders for current guest session
+      responses:
+        '200':
+          description: orders array
+  /api/admin/auth/login:
+    post:
+      tags: [Staff auth]
+      summary: Staff login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: accessToken, refreshToken, admin profile
+  /api/admin/auth/refresh:
+    post:
+      tags: [Staff auth]
+      summary: Refresh staff tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+  /api/admin/tables:
+    get:
+      tags: [Staff tables]
+      security: [{ staffBearer: [] }]
+      summary: List tables with customerUrl
+      responses:
+        '200':
+          description: tables array
+  /api/admin/tables/{id}/sessions:
+    post:
+      tags: [Staff tables]
+      security: [{ staffBearer: [] }]
+      summary: Open table session (PIN returned once)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '201':
+          description: session + pin
+  /api/admin/orders:
+    get:
+      tags: [Staff orders]
+      security: [{ staffBearer: [] }]
+      summary: List orders (use board=true for live kitchen board)
+      parameters:
+        - name: board
+          in: query
+          schema: { type: boolean }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending_confirmation, placed, accepted, preparing, served, paid, cancelled]
+      responses:
+        '200':
+          description: orders + pagination
+  /api/admin/orders/{id}:
+    get:
+      tags: [Staff orders]
+      security: [{ staffBearer: [] }]
+      summary: Order detail with audit events
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: order, events, allowedNextStatuses
+  /api/admin/orders/{id}/status:
+    patch:
+      tags: [Staff orders]
+      security: [{ staffBearer: [] }]
+      summary: Update order status (role rules apply)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [placed, accepted, preparing, served, paid, cancelled]
+      responses:
+        '200':
+          description: Updated order
+  /api/admin/orders/{id}/confirm:
+    post:
+      tags: [Staff orders]
+      security: [{ staffBearer: [] }]
+      summary: Confirm pending_confirmation → placed
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Confirmed order
+  /api/admin/realtime-config:
+    get:
+      tags: [Realtime]
+      security: [{ staffBearer: [] }]
+      summary: Pusher config for staff dashboard
+      responses:
+        '200':
+          description: enabled, key, cluster
+  /api/pusher/auth:
+    post:
+      tags: [Realtime]
+      summary: Pusher private channel auth (staff or guest bearer)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [socket_id, channel_name]
+              properties:
+                socket_id: { type: string }
+                channel_name: { type: string }
+      responses:
+        '200':
+          description: auth signature
+components:
+  securitySchemes:
+    staffBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    guestBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
