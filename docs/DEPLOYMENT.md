@@ -87,7 +87,21 @@ Redeploy the API after changing URLs.
 - Live (when API is running): `GET /api/openapi.yaml`
 - Import into Postman, Swagger UI, or Stoplight for testing.
 
-## 8. Smoke test after deploy
+## 8. “Failed to fetch” on staff login
+
+The admin app calls `VITE_API_URL` from the **browser**. A generic “Failed to fetch” almost always means the request never reached the API.
+
+| Check | Where | What to set |
+| --- | --- | --- |
+| API base URL | **Vercel** → admin project → **Environment** | `VITE_API_URL` = `https://<your-service>.onrender.com` (no trailing slash) |
+| Rebuild | Vercel | **Redeploy** after changing `VITE_API_URL` (Vite bakes it in at build time) |
+| CORS | **Render** → API → Environment | `CORS_ORIGINS` = `https://<admin>.vercel.app,https://<customer>.vercel.app` (exact origins, `https`, no trailing slash) |
+| API up | Browser | Open `https://<api>.onrender.com/health` — first hit on free tier can take ~30s while the service wakes |
+| Demo user | Neon DB | Run seed once against production (`npm run db:seed` with production `.env`) or login will return **401**, not “Failed to fetch” |
+
+In the browser: **F12 → Network** → click the failed `login` request. If the URL is `http://localhost:4000/...`, fix `VITE_API_URL` and redeploy.
+
+## 9. Smoke test after deploy
 
 ```powershell
 $api = "https://your-api.onrender.com"

@@ -6,7 +6,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/t/:qrToken" element={<TablePage />} />
+      <Route path="/t/:qrToken/bistro" element={<TablePage design="bistro" />} />
+      <Route path="/t/:qrToken" element={<TablePage design="classic" />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

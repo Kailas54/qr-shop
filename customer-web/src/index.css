@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@400;500;600;700;800&family=Playfair+Display:wght@500;600;700&display=swap');
 @import 'tailwindcss';
 
 :root {
@@ -18,4 +18,12 @@ html[lang='ar'] body {
 .customer-app {
   --brand: #e4002b;
   --bg-cream: #faf9f6;
+}
+
+.customer-app-bistro {
+  --bistro-brand: #9f1239;
+}
+
+.customer-app-bistro .bistro-serif {
+  font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
 }

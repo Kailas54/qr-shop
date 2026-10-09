@@ -41,10 +41,19 @@ export async function apiRequest<T>(
     headers.set('Authorization', `Bearer ${options.token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    const hint =
+      import.meta.env.PROD && API_URL.includes('localhost')
+        ? 'VITE_API_URL was not set at build time (still pointing at localhost). In Vercel → Environment, set VITE_API_URL to your Render API URL, then redeploy.'
+        : `Check that the API is running (${API_URL}/health), VITE_API_URL on Vercel matches Render, and Render CORS_ORIGINS includes this admin site URL.`;
+    throw new Error(`Cannot reach API at ${API_URL}. ${hint}`);
+  }
 
   const body = await parseJson(response);
   if (!response.ok) {

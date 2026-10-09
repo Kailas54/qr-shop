@@ -36,10 +36,19 @@ export async function apiRequest<T>(
     headers.set('Idempotency-Key', options.idempotencyKey);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    const hint =
+      import.meta.env.PROD && API_URL.includes('localhost')
+        ? 'Set VITE_API_URL to your Render API URL on Vercel and redeploy.'
+        : `Confirm ${API_URL}/health responds and Render CORS_ORIGINS includes this site.`;
+    throw new Error(`Cannot reach API at ${API_URL}. ${hint}`);
+  }
 
   const body = await parseJson(response);
   if (!response.ok) {
