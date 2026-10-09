@@ -13,6 +13,8 @@ export const ar: MessageTree = {
     done: 'تم',
     copy: 'نسخ',
     system: 'النظام',
+    cart: 'السلة',
+    mainNavigation: 'التنقل الرئيسي',
   },
   orderStatus: {
     pending_confirmation: 'بانتظار الموظف',

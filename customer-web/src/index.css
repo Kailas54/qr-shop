@@ -22,8 +22,19 @@ html[lang='ar'] body {
 
 .customer-app-bistro {
   --bistro-brand: #9f1239;
+  /* LanguageToggle and shared accents use --brand */
+  --brand: #9f1239;
 }
 
 .customer-app-bistro .bistro-serif {
   font-family: 'Playfair Display', Georgia, 'Times New Roman', serif;
+}
+
+html[lang='ar'] .customer-app-bistro .bistro-serif {
+  font-family: 'Noto Sans Arabic', 'Inter', system-ui, sans-serif;
+}
+
+html[lang='ar'] .customer-app-bistro .bistro-category-label {
+  letter-spacing: normal;
+  text-transform: none;
 }

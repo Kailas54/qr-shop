@@ -3,7 +3,7 @@ import { CartSheet } from '../../components/customer/CartSheet';
 import { FoodImage } from '../../components/customer/FoodImage';
 import { IconBag, IconSearch } from '../../components/customer/icons';
 import { HERO_IMAGES, categoryImage, menuItemImage } from '../../lib/productImages';
-import { orderStatusLabel } from '../../../../shared/i18n/index.tsx';
+import { LanguageToggle, orderStatusLabel, useI18n } from '../../../../shared/i18n/index.tsx';
 import { JoinPage } from '../JoinPage';
 import { DesignSwitcher } from './DesignSwitcher';
 import { formatMoney, formatMoneyDetailed } from './menuUtils';
@@ -40,6 +40,7 @@ export function TableExperienceBistro(state: TableSession) {
     resolveMediaUrl,
   } = state;
 
+  const { locale, dir } = useI18n();
   const [tab, setTab] = useState<BistroTab>('menu');
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -77,7 +78,7 @@ export function TableExperienceBistro(state: TableSession) {
 
   if (loadingTable) {
     return (
-      <BistroFrame>
+      <BistroFrame dir={dir}>
         <p className="p-8 text-center text-stone-500">{t('customer.loadingTable')}</p>
       </BistroFrame>
     );
@@ -85,7 +86,7 @@ export function TableExperienceBistro(state: TableSession) {
 
   if (tableError || !table) {
     return (
-      <BistroFrame>
+      <BistroFrame dir={dir}>
         <p className="p-8 text-center text-red-600">{tableError ?? t('customer.tableNotFound')}</p>
       </BistroFrame>
     );
@@ -98,27 +99,23 @@ export function TableExperienceBistro(state: TableSession) {
   const categories = table.menu.categories;
 
   return (
-    <BistroFrame>
+    <BistroFrame dir={dir}>
       <DesignSwitcher qrToken={qrToken} variant="bistro" />
       <div className="pb-24 pt-12">
-        <header className="flex items-center justify-between px-4 py-3">
-          <button
-            type="button"
-            className="flex h-10 w-10 items-center justify-center text-[var(--bistro-brand)]"
-            aria-label={t('customer.navMenu')}
-          >
-            <span className="text-xl" aria-hidden>🍴</span>
-          </button>
-          <h1 className="bistro-serif text-center text-lg font-semibold text-stone-900">{session.restaurantName}</h1>
+        <header className="flex items-center gap-2 px-4 py-3">
+          <LanguageToggle className="shrink-0 scale-[0.92] origin-start" />
+          <h1 className="bistro-serif min-w-0 flex-1 text-center text-lg font-semibold leading-snug text-stone-900">
+            {session.restaurantName}
+          </h1>
           <button
             type="button"
             onClick={() => setCartOpen(true)}
-            className="relative flex h-10 w-10 items-center justify-center text-stone-700"
-            aria-label="Cart"
+            className="relative flex h-10 w-10 shrink-0 items-center justify-center text-stone-700"
+            aria-label={t('common.cart')}
           >
             <IconBag className="h-6 w-6" />
             {cart.itemCount > 0 ? (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--bistro-brand)] px-1 text-[9px] font-bold text-white">
+              <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--bistro-brand)] px-1 text-[9px] font-bold text-white">
                 {cart.itemCount > 9 ? '9+' : cart.itemCount}
               </span>
             ) : null}
@@ -181,7 +178,9 @@ export function TableExperienceBistro(state: TableSession) {
               ) : (
                 groupedByCategory.map((group) => (
                   <section key={group.name} className="mb-8">
-                    <p className="text-[11px] font-semibold uppercase tracking-widest text-stone-400">{group.name}</p>
+                    <p className="bistro-category-label text-[11px] font-semibold uppercase tracking-widest text-stone-400">
+                      {group.name}
+                    </p>
                     <h2 className="bistro-serif mt-0.5 text-2xl font-semibold text-stone-900">{group.name}</h2>
                     <ul className="mt-3 space-y-4">
                       {group.rows.map((row) => {
@@ -226,7 +225,9 @@ export function TableExperienceBistro(state: TableSession) {
                                 type="button"
                                 disabled={!row.item.isAvailable}
                                 onClick={() => cart.addItem(row.item)}
-                                className="mt-2 rounded-lg bg-[var(--bistro-brand)] py-1.5 text-xs font-bold uppercase tracking-wide text-white disabled:opacity-40"
+                                className={`mt-2 rounded-lg bg-[var(--bistro-brand)] py-1.5 text-xs font-bold text-white disabled:opacity-40 ${
+                                  locale === 'ar' ? '' : 'uppercase tracking-wide'
+                                }`}
                               >
                                 {t('customer.bistroAdd')}
                               </button>
@@ -307,7 +308,7 @@ export function TableExperienceBistro(state: TableSession) {
 
       <nav
         className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-lg border-t border-stone-200 bg-white px-6 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2"
-        aria-label="Main"
+        aria-label={t('common.mainNavigation')}
       >
         <ul className="flex justify-between">
           <BistroNavItem
@@ -342,9 +343,12 @@ export function TableExperienceBistro(state: TableSession) {
   );
 }
 
-function BistroFrame({ children }: { children: ReactNode }) {
+function BistroFrame({ children, dir }: { children: ReactNode; dir: 'ltr' | 'rtl' }) {
   return (
-    <div className="customer-app-bistro mx-auto min-h-screen max-w-lg bg-white text-stone-900 shadow-xl sm:my-4 sm:min-h-[calc(100vh-2rem)] sm:rounded-[2rem] sm:border sm:border-stone-200/60">
+    <div
+      dir={dir}
+      className="customer-app-bistro mx-auto min-h-screen max-w-lg bg-white text-stone-900 shadow-xl sm:my-4 sm:min-h-[calc(100vh-2rem)] sm:rounded-[2rem] sm:border sm:border-stone-200/60"
+    >
       {children}
     </div>
   );

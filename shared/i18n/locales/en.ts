@@ -11,6 +11,8 @@ export const en = {
     done: 'Done',
     copy: 'Copy',
     system: 'System',
+    cart: 'Cart',
+    mainNavigation: 'Main navigation',
   },
   orderStatus: {
     pending_confirmation: 'Waiting for staff',

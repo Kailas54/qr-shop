@@ -84,12 +84,12 @@ export function useI18n() {
 }
 
 export function LanguageToggle({ className = '' }: { className?: string }) {
-  const { locale, setLocale } = useI18n();
+  const { locale, setLocale, t } = useI18n();
   return (
     <div
       className={`inline-flex overflow-hidden rounded-xl border border-stone-200 bg-white text-xs font-semibold shadow-sm ${className}`}
       role="group"
-      aria-label="Language"
+      aria-label={t('common.language')}
     >
       <button
         type="button"
